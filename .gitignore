@@ -15,6 +15,7 @@ shannon/
 # Output
 output/
 reports/
+scans/
 *.md.bak
 
 # IDE

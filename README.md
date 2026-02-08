@@ -12,6 +12,9 @@ Shannon tabanlı, anonimlik katmanı ile güçlendirilmiş web uygulama güvenli
 - **Scan** — Zafiyet tespiti (Vulnerability Analysis)  
 - **Find** — Doğrulanmış exploit kanıtları (Proof-by-Exploitation)
 
+- **URL-only modu** — Sadece URL ile tarama (repo gerekmez) — Nuclei ile black-box
+- **Shannon modu** — Kaynak kod gerekli — White-box AI pentest
+
 - **Anonymization Layer** — Proxy, Tor, VPN ve header gizleme desteği
 - **Custom User-Agent** — Fingerprint karıştırma
 - **Request Timing Jitter** — Pattern analizi zorlaştırma

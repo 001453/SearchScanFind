@@ -1,6 +1,7 @@
 /**
  * Search Scan Find - Backend API
  * Taramaları yönetir, raporları okur, yeni tarama başlatır.
+ * Shannon (white-box) + Nuclei (URL-only black-box) destekler.
  */
 
 import "dotenv/config";
@@ -10,6 +11,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
+import { runNucleiScan, getUrlScanSessions, getUrlScanReport } from "../src/scanners/nuclei.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -25,8 +27,8 @@ if (fs.existsSync(FRONTEND_DIST)) {
   app.use(express.static(FRONTEND_DIST));
 }
 
-// Scan session listesini tara
-function getScanSessions() {
+// Shannon scan session listesini tara
+function getShannonSessions() {
   if (!fs.existsSync(AUDIT_LOGS)) return [];
   const entries = fs.readdirSync(AUDIT_LOGS, { withFileTypes: true });
   const sessions = [];
@@ -46,11 +48,21 @@ function getScanSessions() {
       path: sessionPath,
       hasReport: fs.existsSync(reportPath),
       reportPath: fs.existsSync(reportPath) ? reportPath : null,
+      type: "shannon",
       ...meta,
     });
   }
   sessions.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
   return sessions;
+}
+
+// Tüm scan session'ları (Shannon + URL-only)
+function getScanSessions() {
+  const shannon = getShannonSessions();
+  const urlScans = getUrlScanSessions().map((s) => ({ ...s, type: "url-only" }));
+  const all = [...shannon, ...urlScans];
+  all.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
+  return all;
 }
 
 // Rapor içinden zafiyetleri parse et
@@ -119,7 +131,22 @@ app.get("/api/scans/:id/report", (req, res) => {
   try {
     const sessions = getScanSessions();
     const s = sessions.find((x) => x.id === req.params.id);
-    if (!s || !s.reportPath) return res.status(404).json({ error: "Report not found" });
+    if (!s) return res.status(404).json({ error: "Scan not found" });
+
+    // URL-only (Nuclei) rapor
+    if (s.type === "url-only" || s.id.startsWith("url_")) {
+      const report = getUrlScanReport(s.id);
+      if (!report) {
+        return res.json({
+          content: "## Tarama devam ediyor...\n\nNuclei arka planda çalışıyor. Biraz bekleyip tekrar deneyin.",
+          vulnerabilities: [],
+        });
+      }
+      return res.json(report);
+    }
+
+    // Shannon rapor
+    if (!s.reportPath) return res.status(404).json({ error: "Report not found" });
     const content = fs.readFileSync(s.reportPath, "utf8");
     res.json({ content, vulnerabilities: parseVulnerabilities(content) });
   } catch (e) {
@@ -131,13 +158,21 @@ app.get("/api/vulnerabilities", (req, res) => {
   try {
     const sessions = getScanSessions();
     const all = [];
+
     for (const s of sessions) {
-      if (!s.reportPath) continue;
-      const content = fs.readFileSync(s.reportPath, "utf8");
-      const vulns = parseVulnerabilities(content).map((v) => ({ ...v, scanId: s.id, target: s.target || s.id }));
-      all.push(...vulns);
+      if (s.type === "url-only" || s.id.startsWith("url_")) {
+        const report = getUrlScanReport(s.id);
+        if (report?.vulnerabilities) {
+          all.push(...report.vulnerabilities.map((v) => ({ ...v, scanId: s.id, target: s.url || s.hostname || s.id })));
+        }
+      } else if (s.reportPath) {
+        const content = fs.readFileSync(s.reportPath, "utf8");
+        all.push(...parseVulnerabilities(content).map((v) => ({ ...v, scanId: s.id, target: s.target || s.id })));
+      }
     }
-    all.sort((a, b) => (b.severity === "Critical" ? 1 : 0) - (a.severity === "Critical" ? 1 : 0));
+
+    const sevOrder = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
+    all.sort((a, b) => (sevOrder[a.severity] ?? 5) - (sevOrder[b.severity] ?? 5));
     res.json(all);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -145,9 +180,30 @@ app.get("/api/vulnerabilities", (req, res) => {
 });
 
 app.post("/api/scans", async (req, res) => {
-  const { url, repo, anonymous } = req.body || {};
-  if (!url || !repo) {
-    return res.status(400).json({ error: "url and repo required" });
+  const { url, repo, anonymous, urlOnly } = req.body || {};
+
+  if (!url) {
+    return res.status(400).json({ error: "url required" });
+  }
+
+  // URL-only modu (Nuclei) - repo gerekmez
+  if (urlOnly) {
+    try {
+      const { id } = runNucleiScan(url);
+      return res.status(202).json({
+        message: "URL taraması başlatıldı (Nuclei)",
+        id,
+        url,
+        urlOnly: true,
+      });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // Shannon modu - repo zorunlu
+  if (!repo) {
+    return res.status(400).json({ error: "Shannon için repo gerekli. URL-only mod için urlOnly: true kullanın." });
   }
 
   const shannonDir = path.join(ROOT, "shannon");
@@ -167,17 +223,11 @@ app.post("/api/scans", async (req, res) => {
       shell: false,
     });
 
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.on("data", (d) => { stdout += d.toString(); });
-    child.stderr?.on("data", (d) => { stderr += d.toString(); });
-
-    child.on("close", (code) => {
-      // Async olarak bitti, client zaten 202 almış olacak
-    });
+    child.stdout?.on("data", () => {});
+    child.stderr?.on("data", () => {});
 
     res.status(202).json({
-      message: "Scan started",
+      message: "Shannon taraması başlatıldı",
       url,
       repo,
       pid: child.pid,

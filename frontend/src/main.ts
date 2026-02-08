@@ -120,8 +120,8 @@ async function loadScans() {
     el.innerHTML = scans.map((s: any) => `
       <div class="scan-card bg-[#18181c] border border-zinc-800 rounded-xl p-6 flex items-center justify-between cursor-pointer transition-colors" data-report="${s.id}">
         <div>
-          <h3 class="font-mono text-lg">${s.target || s.id}</h3>
-          <p class="text-zinc-500 text-sm mt-1">${s.id}</p>
+          <h3 class="font-mono text-lg">${s.target || s.hostname || s.url || s.id}</h3>
+          <p class="text-zinc-500 text-sm mt-1">${s.type === "url-only" ? "URL (Nuclei)" : "Shannon (White-box)"} · ${s.id}</p>
         </div>
         <div class="flex items-center gap-4">
           ${s.hasReport ? '<span class="px-3 py-1 rounded-full text-xs bg-[#22c55e]/20 text-[#22c55e]">Rapor hazır</span>' : '<span class="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-500">Devam ediyor</span>'}
@@ -196,16 +196,20 @@ function newScanHTML() {
       <div class="max-w-2xl">
         <form id="new-scan-form" class="bg-[#18181c] border border-zinc-800 rounded-xl p-8 space-y-6">
           <div>
-            <label class="block text-sm font-medium text-zinc-400 mb-2">Hedef URL</label>
+            <label class="block text-sm font-medium text-zinc-400 mb-2">Hedef URL *</label>
             <input type="url" name="url" required placeholder="https://hedef-uygulama.com" class="w-full px-4 py-3 rounded-lg bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-[#22c55e]">
           </div>
-          <div>
-            <label class="block text-sm font-medium text-zinc-400 mb-2">Kaynak Kod Dizini (Repo Path)</label>
-            <input type="text" name="repo" required placeholder="C:\Projects\myapp veya /path/to/repo" class="w-full px-4 py-3 rounded-lg bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-[#22c55e]">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" name="urlOnly" id="urlOnly" class="rounded bg-zinc-800 border-zinc-600 text-[#22c55e] focus:ring-[#22c55e]">
+            <label for="urlOnly" class="text-sm text-zinc-400">Sadece URL ile tarama (repo gerekmez - Nuclei)</label>
+          </div>
+          <div id="repo-field">
+            <label class="block text-sm font-medium text-zinc-400 mb-2">Kaynak Kod Dizini (Shannon için)</label>
+            <input type="text" name="repo" placeholder="C:\Projects\myapp veya /path/to/repo" class="w-full px-4 py-3 rounded-lg bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-[#22c55e]">
           </div>
           <div class="flex items-center gap-2">
             <input type="checkbox" name="anonymous" id="anon" class="rounded bg-zinc-800 border-zinc-600 text-[#22c55e] focus:ring-[#22c55e]">
-            <label for="anon" class="text-sm text-zinc-400">Anonim mod (Tor/Proxy üzerinden)</label>
+            <label for="anon" class="text-sm text-zinc-400">Anonim mod (Tor/Proxy - sadece Shannon)</label>
           </div>
           <button type="submit" class="w-full py-3 rounded-lg bg-[#22c55e] text-black font-semibold hover:bg-[#16a34a] transition-colors">Tarama Başlat</button>
         </form>
@@ -218,13 +222,29 @@ function newScanHTML() {
 function bindNewScanForm() {
   const form = document.getElementById("new-scan-form");
   const result = document.getElementById("scan-result");
+  const urlOnlyCheck = document.getElementById("urlOnly");
+  const repoField = document.getElementById("repo-field");
   if (!form || !result) return;
+
+  urlOnlyCheck?.addEventListener("change", () => {
+    if (repoField) (repoField as HTMLElement).style.opacity = (urlOnlyCheck as HTMLInputElement).checked ? "0.5" : "1";
+  });
+
   form.onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(form as HTMLFormElement);
     const url = fd.get("url") as string;
-    const repo = fd.get("repo") as string;
+    const repo = (fd.get("repo") as string)?.trim() || "";
     const anonymous = !!fd.get("anonymous");
+    const urlOnly = !!(fd.get("urlOnly") || (urlOnlyCheck as HTMLInputElement)?.checked);
+
+    if (!urlOnly && !repo) {
+      result.classList.remove("hidden");
+      result.className = "mt-4 text-sm text-amber-500";
+      result.textContent = "Shannon modu için Kaynak Kod Dizini gerekli. Veya 'Sadece URL ile tarama' işaretleyin.";
+      return;
+    }
+
     result.classList.remove("hidden");
     result.className = "mt-4 text-sm text-amber-500";
     result.textContent = "Tarama başlatılıyor...";
@@ -232,10 +252,12 @@ function bindNewScanForm() {
       await fetchAPI("/scans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, repo, anonymous }),
+        body: JSON.stringify({ url, repo: repo || undefined, anonymous, urlOnly }),
       });
       result.className = "mt-4 text-sm text-[#22c55e]";
-      result.textContent = "Tarama başlatıldı! Shannon arka planda çalışıyor. Taramalar sayfasından takip edebilirsiniz.";
+      result.textContent = urlOnly
+        ? "URL taraması başlatıldı! Nuclei arka planda çalışıyor. Birkaç dakika içinde Taramalar sayfasından sonuçları görebilirsiniz."
+        : "Shannon taraması başlatıldı! Taramalar sayfasından takip edebilirsiniz.";
       (form as HTMLFormElement).reset();
     } catch (err) {
       result.className = "mt-4 text-sm text-red-500";
