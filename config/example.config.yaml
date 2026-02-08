@@ -1,0 +1,56 @@
+# Search Scan Find - Örnek Yapılandırma
+# Bu dosyayı my-config.yaml olarak kopyalayın ve düzenleyin
+
+# ==================== ANONİMLİK AYARLARI ====================
+anonymization:
+  enabled: true
+  
+  # Proxy modu: none | http | socks5 | tor
+  mode: tor
+  
+  # HTTP/HTTPS proxy (mode: http veya socks5 için)
+  proxy:
+    url: "socks5://127.0.0.1:9050"  # Tor default port
+    # url: "http://proxy.example.com:8080"
+  
+  # User-Agent rotasyonu
+  user_agents:
+    rotate: true
+    custom_list: []  # Boş = varsayılan listeyi kullan
+  
+  # Header temizleme (parmak izi azaltma)
+  strip_headers:
+    - "X-Forwarded-For"
+    - "X-Real-IP"
+    - "X-Client-IP"
+    - "Via"
+    - "Forwarded"
+  
+  # İstek zamanlama gecikmesi (ms) - pattern analizi zorlaştırır
+  timing_jitter:
+    enabled: true
+    min_delay_ms: 500
+    max_delay_ms: 3000
+
+# ==================== HEDEF AYARLARI ====================
+target:
+  url: "https://your-app.com"
+  repo_path: "C:/path/to/your/repo"
+
+# ==================== AUTH (Opsiyonel) ====================
+authentication:
+  login_type: form
+  login_url: "https://your-app.com/login"
+  credentials:
+    username: "test@example.com"
+    password: "yourpassword"
+    totp_secret: ""  # 2FA için
+
+# ==================== KAPSAM ====================
+rules:
+  avoid:
+    - type: path
+      url_path: "/logout"
+  focus:
+    - type: path
+      url_path: "/api"

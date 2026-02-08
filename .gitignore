@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+build/
+*.log
+
+# Shannon (npm run setup ile klonlanır)
+shannon/
+
+# Output
+output/
+reports/
+*.md.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Secrets
+*.pem
+*.key
+secrets/

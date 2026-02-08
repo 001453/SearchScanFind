@@ -1,0 +1,40 @@
+# Search Scan Find - Yapılandırma
+# Hedef URL ve repo_path'i kendi projenize göre güncelleyin
+
+# ==================== ANONİMLİK AYARLARI ====================
+anonymization:
+  enabled: true
+  mode: tor
+  proxy:
+    url: "socks5://127.0.0.1:9050"  # Tor default port
+  user_agents:
+    rotate: true
+  strip_headers:
+    - "X-Forwarded-For"
+    - "X-Real-IP"
+    - "X-Client-IP"
+    - "Via"
+    - "Forwarded"
+  timing_jitter:
+    enabled: true
+    min_delay_ms: 500
+    max_delay_ms: 3000
+
+# ==================== HEDEF AYARLARI ====================
+target:
+  url: "https://your-app.com"        # Test edilecek uygulama URL'i
+  repo_path: "C:/path/to/your/repo"  # Kaynak kod dizini
+
+# ==================== AUTH (Opsiyonel) ====================
+authentication:
+  login_type: form
+  login_url: ""
+  credentials:
+    username: ""
+    password: ""
+    totp_secret: ""
+
+# ==================== KAPSAM ====================
+rules:
+  avoid: []
+  focus: []

@@ -1,0 +1,31 @@
+{
+  "name": "search-scan-find",
+  "version": "1.0.0",
+  "description": "Identity-anonymized autonomous AI pentesting platform",
+  "type": "module",
+  "bin": {
+    "ssf": "src/cli/ssf.js"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "start": "node src/cli/ssf.js",
+    "anon-proxy": "node src/anonymization/proxy-server.js",
+    "config:validate": "node src/config/validator.js",
+    "dashboard": "node server/index.js",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "dev": "npm run frontend:build && npm run dashboard"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "http-proxy": "^1.18.1",
+    "js-yaml": "^4.1.0",
+    "socks-proxy-agent": "^8.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  }
+}
